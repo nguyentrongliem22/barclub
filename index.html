@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Bar Club Ultimate Management v3.0</title>
+    <title>Titan Club Management System</title>
     
     <!-- React & ReactDOM -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
@@ -98,27 +98,64 @@
 
             return (
                 <div className="min-h-screen flex items-center justify-center bg-slate-950 p-4">
-                    <div className="bg-slate-900 border border-slate-700 p-8 rounded-2xl w-full max-w-md shadow-2xl animate-fade-in">
-                        <div className="text-center mb-8">
-                            <div className="w-20 h-20 bg-gradient-to-br from-amber-500 to-purple-600 rounded-2xl mx-auto flex items-center justify-center text-4xl mb-4">🍷</div>
-                            <h1 className="text-2xl font-bold text-white">BAR ULTIMATE</h1>
-                            <p className="text-slate-400">Hệ thống quản lý chuyên nghiệp</p>
+                    <div className="bg-slate-900 border border-slate-700 p-8 rounded-2xl w-full max-w-5xl shadow-2xl animate-fade-in flex flex-col md:flex-row gap-10">
+                        {/* LEFT: FORM */}
+                        <div className="flex-1">
+                            <div className="text-center mb-8">
+                                <div className="w-20 h-20 bg-gradient-to-br from-amber-500 to-purple-600 rounded-2xl mx-auto flex items-center justify-center text-4xl mb-4">🍷</div>
+                                <h1 className="text-3xl font-black text-white tracking-wider">TITAN CLUB</h1>
+                                <p className="text-slate-400 mt-2">Hệ thống quản lý vận hành Nightlife</p>
+                            </div>
+                            <form onSubmit={handleSubmit} className="space-y-4">
+                                <div>
+                                    <label className="block text-sm text-slate-400 mb-1">Tài khoản</label>
+                                    <input type="text" value={username} onChange={e=>setUsername(e.target.value)} className="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-white focus:border-amber-500 outline-none transition-colors" placeholder="Nhập username..." />
+                                </div>
+                                <div>
+                                    <label className="block text-sm text-slate-400 mb-1">Mật khẩu</label>
+                                    <input type="password" value={password} onChange={e=>setPassword(e.target.value)} className="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-white focus:border-amber-500 outline-none transition-colors" placeholder="••••••" />
+                                </div>
+                                {error && <p className="text-red-500 text-sm text-center bg-red-500/10 p-2 rounded border border-red-500/20">{error}</p>}
+                                <button type="submit" className="w-full bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white font-bold py-3 rounded-lg transition-all shadow-lg shadow-amber-500/20">ĐĂNG NHẬP HỆ THỐNG</button>
+                            </form>
+                            <div className="mt-8 pt-6 border-t border-slate-800 text-center text-xs text-slate-500">
+                                <p className="mb-1"><strong className="text-slate-400">Admin:</strong> admin / 123</p>
+                                <p><strong className="text-slate-400">Staff:</strong> staff1 / 123  |  staff2 / 123</p>
+                            </div>
                         </div>
-                        <form onSubmit={handleSubmit} className="space-y-4">
-                            <div>
-                                <label className="block text-sm text-slate-400 mb-1">Tài khoản</label>
-                                <input type="text" value={username} onChange={e=>setUsername(e.target.value)} className="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-white focus:border-amber-500 outline-none" placeholder="admin / staff1 / staff2" />
+
+                        {/* RIGHT: WORKFLOW GUIDE */}
+                        <div className="flex-1 border-l border-slate-800 pl-0 md:pl-10 pt-6 md:pt-0 border-t md:border-t-0">
+                            <h3 className="text-xl font-bold text-amber-500 mb-6 flex items-center gap-2">
+                                <Icon name="info" size={24}/> LUỒNG HOẠT ĐỘNG
+                            </h3>
+                            <div className="space-y-5 text-sm text-slate-300">
+                                <div className="bg-slate-800/50 p-3 rounded-lg border border-slate-700/50">
+                                    <strong className="text-white block mb-1 text-base">1. Phân Quyền & Vai Trò</strong>
+                                    <ul className="list-disc pl-5 space-y-1 text-slate-400 text-xs leading-relaxed">
+                                        <li><span className="text-purple-400 font-bold">Manager (Admin):</span> Toàn quyền (Menu, Kho, Duyệt hủy, Xem báo cáo). Can thiệp mọi bàn.</li>
+                                        <li><span className="text-amber-400 font-bold">Staff:</span> Chỉ bán hàng (POS). Doanh thu được tính để xếp hạng thi đua (Rank).</li>
+                                    </ul>
+                                </div>
+
+                                <div className="bg-slate-800/50 p-3 rounded-lg border border-slate-700/50">
+                                    <strong className="text-white block mb-1 text-base">2. Quy Tắc Sở Hữu Bàn 🔒</strong>
+                                    <p className="text-xs text-slate-400 leading-relaxed">
+                                        Khi nhân viên mở một bàn <span className="text-green-400">Trống</span>, bàn đó sẽ được <strong>khóa</strong> theo nhân viên đó. 
+                                        Nhân viên khác chỉ được xem, <span className="text-red-400">không được sửa/thêm món</span>. 
+                                        Chỉ Manager mới có quyền can thiệp vào bàn của người khác.
+                                    </p>
+                                </div>
+
+                                <div className="bg-slate-800/50 p-3 rounded-lg border border-slate-700/50">
+                                    <strong className="text-white block mb-1 text-base">3. Quy Trình Order & Hủy Món ⚠️</strong>
+                                    <ul className="list-disc pl-5 space-y-1 text-slate-400 text-xs leading-relaxed">
+                                        <li><strong>Bước 1:</strong> Chọn món -> Lưu Order (Gửi Bếp). Lúc này món đã được <strong>Cam kết (Committed)</strong>.</li>
+                                        <li><strong>Bước 2:</strong> Nếu khách trả món/hủy món đã gửi bếp -> Nhân viên bấm nút trừ (-) để tạo <strong>Yêu cầu hủy</strong>.</li>
+                                        <li><strong>Bước 3:</strong> Manager nhận thông báo (🔔) -> Bấm <strong>Duyệt</strong> thì món mới chính thức bị hủy.</li>
+                                    </ul>
+                                </div>
                             </div>
-                            <div>
-                                <label className="block text-sm text-slate-400 mb-1">Mật khẩu</label>
-                                <input type="password" value={password} onChange={e=>setPassword(e.target.value)} className="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-white focus:border-amber-500 outline-none" placeholder="123" />
-                            </div>
-                            {error && <p className="text-red-500 text-sm text-center">{error}</p>}
-                            <button type="submit" className="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-3 rounded-lg transition-colors">Đăng Nhập</button>
-                        </form>
-                        <div className="mt-6 text-center text-xs text-slate-500">
-                            <p>Admin: admin / 123</p>
-                            <p>Staff: staff1 / 123 | staff2 / 123</p>
                         </div>
                     </div>
                 </div>
@@ -338,7 +375,7 @@
                     <Modal title="Xác nhận thanh toán" onClose={() => setBillingTable(null)}>
                          <div className="bg-white text-slate-900 p-4 rounded font-mono text-sm shadow-inner mb-4">
                             <div className="text-center pb-4 border-b border-dashed border-slate-300 mb-4">
-                                <h2 className="text-xl font-bold">BAR CLUB ULTIMATE</h2>
+                                <h2 className="text-xl font-bold">TITAN CLUB</h2>
                                 <p className="text-xs text-slate-500">{new Date().toLocaleString()}</p>
                                 <p className="text-xs text-slate-500">NV: {currentUser.name}</p>
                             </div>
@@ -610,7 +647,7 @@
             const Sidebar = () => (
                 <div className="hidden md:flex w-64 flex-col bg-slate-900 border-r border-slate-800 h-screen fixed left-0 top-0 z-20">
                     <div className="p-6 border-b border-slate-800">
-                        <h1 className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-500 to-purple-600">BAR PRO</h1>
+                        <h1 className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-500 to-purple-600">TITAN CLUB</h1>
                         <p className="text-xs text-slate-500 mt-1">Xin chào, <span className="text-white font-bold">{currentUser.name}</span></p>
                     </div>
                     
