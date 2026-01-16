@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Bar Club Ultimate Management</title>
+    <title>Bar Club Ultimate Management v3.0</title>
     
     <!-- React & ReactDOM -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
@@ -33,7 +33,6 @@
         /* Animations */
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .animate-fade-in { animation: fadeIn 0.2s ease-out; }
-        .animate-pulse-slow { animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
     </style>
 </head>
 <body>
@@ -52,6 +51,13 @@
         const formatMoney = (amount) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
         const formatDate = (date) => new Date(date).toLocaleString('vi-VN');
 
+        // --- AUTH DATA ---
+        const USERS = [
+            { username: 'admin', password: '123', role: 'manager', name: 'Quản Lý Cấp Cao' },
+            { username: 'staff1', password: '123', role: 'staff', name: 'Nhân viên 1' },
+            { username: 'staff2', password: '123', role: 'staff', name: 'Nhân viên 2' },
+        ];
+
         // --- INITIAL DATA ---
         const SEED_INVENTORY = [
             { id: 'INV1', name: 'Chivas 18 (Chai)', stock: 20, unit: 'Chai', minStock: 5 },
@@ -69,10 +75,55 @@
         ];
 
         const SEED_TABLES = Array.from({ length: 12 }, (_, i) => ({
-            id: `TB${i+1}`, name: `Bàn ${i+1}`, zone: i < 4 ? 'VIP' : 'Normal', status: 'empty', orders: [], checkInTime: null
+            id: `TB${i+1}`, name: `Bàn ${i+1}`, zone: i < 4 ? 'VIP' : 'Normal', status: 'empty', orders: [], owner: null // owner: username của staff mở bàn
         }));
 
         // --- COMPONENTS ---
+
+        // 1. LOGIN SCREEN
+        const LoginScreen = ({ onLogin }) => {
+            const [username, setUsername] = useState('');
+            const [password, setPassword] = useState('');
+            const [error, setError] = useState('');
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                const user = USERS.find(u => u.username === username && u.password === password);
+                if (user) {
+                    onLogin(user);
+                } else {
+                    setError('Tài khoản hoặc mật khẩu không đúng!');
+                }
+            };
+
+            return (
+                <div className="min-h-screen flex items-center justify-center bg-slate-950 p-4">
+                    <div className="bg-slate-900 border border-slate-700 p-8 rounded-2xl w-full max-w-md shadow-2xl animate-fade-in">
+                        <div className="text-center mb-8">
+                            <div className="w-20 h-20 bg-gradient-to-br from-amber-500 to-purple-600 rounded-2xl mx-auto flex items-center justify-center text-4xl mb-4">🍷</div>
+                            <h1 className="text-2xl font-bold text-white">BAR ULTIMATE</h1>
+                            <p className="text-slate-400">Hệ thống quản lý chuyên nghiệp</p>
+                        </div>
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            <div>
+                                <label className="block text-sm text-slate-400 mb-1">Tài khoản</label>
+                                <input type="text" value={username} onChange={e=>setUsername(e.target.value)} className="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-white focus:border-amber-500 outline-none" placeholder="admin / staff1 / staff2" />
+                            </div>
+                            <div>
+                                <label className="block text-sm text-slate-400 mb-1">Mật khẩu</label>
+                                <input type="password" value={password} onChange={e=>setPassword(e.target.value)} className="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-white focus:border-amber-500 outline-none" placeholder="123" />
+                            </div>
+                            {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+                            <button type="submit" className="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-3 rounded-lg transition-colors">Đăng Nhập</button>
+                        </form>
+                        <div className="mt-6 text-center text-xs text-slate-500">
+                            <p>Admin: admin / 123</p>
+                            <p>Staff: staff1 / 123 | staff2 / 123</p>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
 
         const Modal = ({ title, onClose, children }) => (
             <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
@@ -86,7 +137,7 @@
             </div>
         );
 
-        // 2. MANAGER: Void Request Handler (New)
+        // 2. MANAGER: Void Request Handler
         const RequestManager = ({ requests, onApprove, onReject }) => (
             <div className="p-4 md:p-8">
                 <h2 className="text-xl font-bold text-amber-500 mb-6 flex items-center gap-2">
@@ -115,39 +166,46 @@
             </div>
         );
 
-        // 3. STAFF/POS SYSTEM
-        const POSSystem = ({ tables, menu, role, onUpdateTable, onCheckout, onVoidRequest }) => {
+        // 3. POS SYSTEM (Updated with Table Ownership)
+        const POSSystem = ({ tables, menu, currentUser, onUpdateTable, onCheckout, onVoidRequest }) => {
             const [activeTable, setActiveTable] = useState(null);
             const [billingTable, setBillingTable] = useState(null);
             const [filterZone, setFilterZone] = useState('All');
-            
-            // State local cho việc hủy món
-            const [voidItem, setVoidItem] = useState(null); // Item đang được chọn để hủy
+            const [voidItem, setVoidItem] = useState(null);
 
             const calculateTotal = (orders) => orders.reduce((sum, item) => sum + (item.price * item.qty), 0);
 
+            // Xử lý khi nhấn vào bàn
+            const handleTableClick = (table) => {
+                // Logic Quyền hạn:
+                // 1. Admin (manager) được mở mọi bàn.
+                // 2. Bàn trống (empty) -> Ai cũng được mở.
+                // 3. Bàn đang có khách (occupied) -> Chỉ chủ bàn (owner) hoặc Manager mới được mở để order tiếp.
+                
+                const isManager = currentUser.role === 'manager';
+                const isEmpty = table.status === 'empty';
+                const isOwner = table.owner === currentUser.username;
+
+                if (isManager || isEmpty || isOwner) {
+                    setActiveTable(table);
+                } else {
+                    alert(`⛔ Bàn này đang được phục vụ bởi: ${table.owner || 'Unknown'}\nBạn chỉ có quyền xem, không được chỉnh sửa.`);
+                }
+            };
+
             const addToOrder = (item) => {
                 const currentOrders = activeTable.orders ? [...activeTable.orders] : [];
-                // Check if item exists
                 const existingIndex = currentOrders.findIndex(o => o.id === item.id);
                 
                 if (existingIndex > -1) {
-                    // Item exists
-                    currentOrders[existingIndex] = {
-                        ...currentOrders[existingIndex],
-                        qty: currentOrders[existingIndex].qty + 1
-                        // Note: We don't change committedQty here
-                    };
+                    currentOrders[existingIndex] = { ...currentOrders[existingIndex], qty: currentOrders[existingIndex].qty + 1 };
                 } else {
-                    // New item
                     currentOrders.push({ ...item, qty: 1, committedQty: 0 });
                 }
                 setActiveTable({ ...activeTable, orders: currentOrders });
             };
 
             const handleMinusClick = (item) => {
-                // Logic phân quyền:
-                // Nếu số lượng hiện tại > số lượng đã lưu (committedQty) -> Là món mới thêm, chưa gửi bếp -> Được xóa thoải mái
                 if (item.qty > (item.committedQty || 0)) {
                      const currentOrders = [...activeTable.orders];
                      const idx = currentOrders.findIndex(o => o.id === item.id);
@@ -158,27 +216,26 @@
                      }
                      setActiveTable({ ...activeTable, orders: currentOrders });
                 } else {
-                    // Nếu số lượng <= committedQty -> Đã gửi bếp -> Phải yêu cầu hủy
                     setVoidItem(item);
                 }
             };
 
             const confirmVoidRequest = () => {
-                onVoidRequest(activeTable.id, activeTable.name, voidItem, 1); // Request void 1 unit
+                onVoidRequest(activeTable.id, activeTable.name, voidItem, 1);
                 setVoidItem(null);
                 alert("Đã gửi yêu cầu hủy món lên Quản lý!");
             };
 
             const saveOrder = () => {
-                // Khi lưu, tất cả qty hiện tại sẽ trở thành committedQty
-                const committedOrders = activeTable.orders.map(o => ({
-                    ...o,
-                    committedQty: o.qty // Lock số lượng này lại
-                }));
+                const committedOrders = activeTable.orders.map(o => ({ ...o, committedQty: o.qty }));
+                
+                // Khi lưu order, nếu bàn trước đó trống -> gán owner là user hiện tại
+                const newOwner = activeTable.status === 'empty' ? currentUser.username : activeTable.owner;
 
                 onUpdateTable(activeTable.id, { 
                     orders: committedOrders, 
-                    status: committedOrders.length > 0 ? 'occupied' : 'empty' 
+                    status: committedOrders.length > 0 ? 'occupied' : 'empty',
+                    owner: committedOrders.length > 0 ? newOwner : null
                 });
                 setActiveTable(null);
             };
@@ -194,9 +251,7 @@
                         <p className="text-slate-300 mb-2">Món này đã được gửi Order.</p>
                         <h3 className="text-xl font-bold text-white mb-4">{voidItem?.name}</h3>
                         <p className="text-sm text-slate-400 mb-6">Bạn không có quyền xóa trực tiếp. Vui lòng gửi yêu cầu duyệt.</p>
-                        <button onClick={confirmVoidRequest} className="w-full py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg">
-                            Gửi yêu cầu hoàn trả (x1)
-                        </button>
+                        <button onClick={confirmVoidRequest} className="w-full py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg">Gửi yêu cầu hoàn trả (x1)</button>
                     </div>
                 </Modal>
             );
@@ -245,7 +300,6 @@
                                             </div>
                                             <div className="text-xs text-amber-500">{formatMoney(item.price)}</div>
                                         </div>
-                                        
                                         <div className="flex items-center gap-3 bg-slate-900 rounded p-1">
                                             <button onClick={() => handleMinusClick(item)} className="p-1 text-slate-400 hover:text-red-400">
                                                 {item.qty <= (item.committedQty||0) ? <Icon name="shield-alert" size={16} className="text-red-500"/> : <Icon name="minus" size={16}/>}
@@ -286,6 +340,7 @@
                             <div className="text-center pb-4 border-b border-dashed border-slate-300 mb-4">
                                 <h2 className="text-xl font-bold">BAR CLUB ULTIMATE</h2>
                                 <p className="text-xs text-slate-500">{new Date().toLocaleString()}</p>
+                                <p className="text-xs text-slate-500">NV: {currentUser.name}</p>
                             </div>
                             <div className="mb-2 font-bold">{billingTable.name}</div>
                             <div className="space-y-2 mb-4">
@@ -320,70 +375,128 @@
                         ))}
                     </div>
                     <div className="flex-1 overflow-y-auto p-4 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                        {tables.filter(t => filterZone === 'All' || t.zone === filterZone).map(table => (
-                            <div key={table.id} onClick={() => setActiveTable(table)} 
-                                className={`relative aspect-square rounded-2xl p-4 flex flex-col justify-between cursor-pointer border-2 shadow-lg transition-all active:scale-95
-                                ${table.status === 'occupied' ? 'bg-slate-800 border-green-500 shadow-green-500/10' : 'bg-slate-800 border-slate-700 hover:border-slate-500'}`}>
-                                <div className="flex justify-between items-center">
-                                    <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase ${table.zone === 'VIP' ? 'bg-amber-500 text-black' : 'bg-slate-700 text-slate-400'}`}>{table.zone}</span>
-                                    {table.status === 'occupied' && <Icon name="users" size={14} className="text-green-500"/>}
+                        {tables.filter(t => filterZone === 'All' || t.zone === filterZone).map(table => {
+                            // Check ownership for styling
+                            const isMyTable = table.owner === currentUser.username;
+                            const isOccupied = table.status === 'occupied';
+
+                            return (
+                                <div key={table.id} onClick={() => handleTableClick(table)} 
+                                    className={`relative aspect-square rounded-2xl p-4 flex flex-col justify-between cursor-pointer border-2 shadow-lg transition-all active:scale-95
+                                    ${isOccupied 
+                                        ? (isMyTable || currentUser.role === 'manager' ? 'bg-slate-800 border-green-500 shadow-green-500/10' : 'bg-slate-800 border-red-900 opacity-70') 
+                                        : 'bg-slate-800 border-slate-700 hover:border-slate-500'}`}>
+                                    <div className="flex justify-between items-center">
+                                        <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase ${table.zone === 'VIP' ? 'bg-amber-500 text-black' : 'bg-slate-700 text-slate-400'}`}>{table.zone}</span>
+                                        {isOccupied && <Icon name={isMyTable ? "user-check" : "lock"} size={14} className={isMyTable ? "text-green-500" : "text-red-500"}/>}
+                                    </div>
+                                    <div className="text-center">
+                                        <h3 className="text-xl font-black text-white">{table.name}</h3>
+                                        {isOccupied ? 
+                                            <div className="mt-1">
+                                                <p className="text-green-400 text-xs font-mono">{formatMoney(calculateTotal(table.orders))}</p>
+                                                <p className="text-[10px] text-slate-500 mt-1 truncate">{table.owner}</p>
+                                            </div> : 
+                                            <p className="text-slate-600 text-xs mt-1">Trống</p>
+                                        }
+                                    </div>
+                                    <div className={`w-full h-1.5 rounded-full ${isOccupied ? 'bg-green-500' : 'bg-slate-700'}`}></div>
                                 </div>
-                                <div className="text-center">
-                                    <h3 className="text-xl font-black text-white">{table.name}</h3>
-                                    {table.status === 'occupied' ? 
-                                        <p className="text-green-400 text-xs font-mono mt-1">{formatMoney(calculateTotal(table.orders))}</p> : 
-                                        <p className="text-slate-600 text-xs mt-1">Trống</p>
-                                    }
-                                </div>
-                                <div className={`w-full h-1.5 rounded-full ${table.status === 'occupied' ? 'bg-green-500' : 'bg-slate-700'}`}></div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </div>
             );
         };
 
         const MenuManager = ({ menu, inventory, onUpdateMenu }) => {
-            /* ... (Giữ nguyên logic menu manager cũ) ... */
-            return <div className="p-8 text-center text-slate-400">Giao diện Quản lý Menu (Giống phiên bản trước)</div>; 
-            // Simplified for brevity in this specific update, but functionality remains if needed
+            const [editingItem, setEditingItem] = useState(null);
+            const handleSave = (e) => {
+                e.preventDefault();
+                const formData = new FormData(e.target);
+                const newItem = {
+                    id: editingItem?.id || Date.now(),
+                    name: formData.get('name'),
+                    category: formData.get('category'),
+                    price: Number(formData.get('price')),
+                    image: formData.get('image'),
+                    recipe: [] 
+                };
+                onUpdateMenu(newItem, editingItem ? 'update' : 'add');
+                setEditingItem(null);
+            };
+            return (
+                <div className="p-8">
+                    <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-xl font-bold text-amber-500">Quản lý Thực Đơn</h2>
+                        <button onClick={() => setEditingItem({})} className="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded flex items-center gap-2"><Icon name="plus-circle"/> Thêm Món</button>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {menu.map(item => (
+                            <div key={item.id} className="bg-slate-800 p-4 rounded-lg border border-slate-700 flex justify-between items-start">
+                                <div className="flex gap-3">
+                                    <div className="w-12 h-12 bg-slate-700 rounded-lg flex items-center justify-center text-2xl">{item.image}</div>
+                                    <div><h4 className="font-bold text-white">{item.name}</h4><p className="text-amber-500 font-mono">{formatMoney(item.price)}</p></div>
+                                </div>
+                                <div className="flex gap-2">
+                                    <button onClick={() => setEditingItem(item)} className="p-2 bg-slate-700 rounded hover:text-amber-400"><Icon name="edit-2" size={16}/></button>
+                                    <button onClick={() => onUpdateMenu(item, 'delete')} className="p-2 bg-slate-700 rounded hover:text-red-400"><Icon name="trash" size={16}/></button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    {editingItem && (
+                        <Modal title={editingItem.id ? "Sửa Món" : "Thêm Món"} onClose={() => setEditingItem(null)}>
+                            <form onSubmit={handleSave} className="space-y-4">
+                                <div><label className="block text-sm text-slate-400">Tên món</label><input name="name" defaultValue={editingItem.name} required className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white"/></div>
+                                <div><label className="block text-sm text-slate-400">Giá bán</label><input type="number" name="price" defaultValue={editingItem.price} required className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white"/></div>
+                                <div><label className="block text-sm text-slate-400">Icon</label><input name="image" defaultValue={editingItem.image || "🍸"} className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white"/></div>
+                                <button type="submit" className="w-full bg-amber-500 text-black font-bold py-3 rounded">Lưu</button>
+                            </form>
+                        </Modal>
+                    )}
+                </div>
+            );
         };
 
         // --- MAIN APP ---
         const App = () => {
-            const [role, setRole] = useState('manager'); 
+            const [currentUser, setCurrentUser] = useState(null); // Auth State
             const [view, setView] = useState('dashboard');
-            
-            const [showPinModal, setShowPinModal] = useState(false);
-            const [pinInput, setPinInput] = useState('');
             
             const [menu, setMenu] = useState(SEED_MENU);
             const [inventory, setInventory] = useState(SEED_INVENTORY);
             const [tables, setTables] = useState(SEED_TABLES);
             const [transactions, setTransactions] = useState([]);
-            
-            // NEW: Quản lý yêu cầu hủy
             const [requests, setRequests] = useState([]);
 
-            const requestRoleSwitch = () => {
-                if (role === 'manager') {
-                    setRole('staff');
-                    setView('pos');
-                } else {
-                    setShowPinModal(true);
-                }
+            // CALCULATE STAFF RANKING
+            const getStaffStats = (username) => {
+                const mySales = transactions.filter(t => t.staff === username).reduce((sum, t) => sum + t.total, 0);
+                
+                // Calculate Rank
+                // Get all sales by staff
+                const staffSales = {};
+                transactions.forEach(t => {
+                    staffSales[t.staff] = (staffSales[t.staff] || 0) + t.total;
+                });
+                // Sort
+                const sortedStaff = Object.keys(staffSales).sort((a,b) => staffSales[b] - staffSales[a]);
+                const rank = sortedStaff.indexOf(username) + 1;
+
+                return { mySales, rank: rank > 0 ? rank : '-' };
             };
 
-            const confirmPin = () => {
-                if (pinInput === '123456') {
-                    setRole('manager');
-                    setView('dashboard');
-                    setShowPinModal(false);
-                    setPinInput('');
-                } else {
-                    alert("Sai mã PIN!");
-                    setPinInput('');
-                }
+            const handleLogin = (user) => {
+                setCurrentUser(user);
+                // Redirect logic based on role
+                if (user.role === 'staff') setView('pos');
+                else setView('dashboard');
+            };
+
+            const handleLogout = () => {
+                setCurrentUser(null);
+                setView('dashboard');
             };
 
             const handleUpdateTable = (tableId, newData) => {
@@ -391,13 +504,19 @@
             };
 
             const handleCheckout = (table) => {
-                // Logic thanh toán giữ nguyên
                 const total = table.orders.reduce((s, i) => s + (i.price * i.qty), 0) * 1.08;
-                setTransactions([{ id: Date.now(), total, time: new Date().toISOString(), table: table.name }, ...transactions]);
-                handleUpdateTable(table.id, { orders: [], status: 'empty' });
+                // Save transaction with staff info
+                setTransactions([{ 
+                    id: Date.now(), 
+                    total, 
+                    time: new Date().toISOString(), 
+                    table: table.name,
+                    staff: currentUser.username // Save staff username
+                }, ...transactions]);
+
+                handleUpdateTable(table.id, { orders: [], status: 'empty', owner: null });
             };
 
-            // LOGIC XỬ LÝ YÊU CẦU HỦY
             const handleVoidRequest = (tableId, tableName, item, qty) => {
                 const newReq = {
                     id: Date.now(),
@@ -405,7 +524,7 @@
                     itemId: item.id, itemName: item.name,
                     qty,
                     time: new Date().toISOString(),
-                    staff: 'Staff',
+                    staff: currentUser.username,
                     status: 'pending'
                 };
                 setRequests([newReq, ...requests]);
@@ -414,8 +533,6 @@
             const handleApproveVoid = (reqId) => {
                 const req = requests.find(r => r.id === reqId);
                 if (!req) return;
-
-                // Thực hiện xóa món trong bàn
                 setTables(prev => prev.map(t => {
                     if (t.id === req.tableId) {
                         const newOrders = [...t.orders];
@@ -432,7 +549,6 @@
                     }
                     return t;
                 }));
-
                 setRequests(requests.filter(r => r.id !== reqId));
                 alert("Đã duyệt hủy món.");
             };
@@ -442,9 +558,21 @@
                 alert("Đã từ chối hủy món.");
             };
 
+            const handleUpdateMenu = (item, action) => {
+                if (action === 'add') setMenu([...menu, item]);
+                if (action === 'update') setMenu(menu.map(m => m.id === item.id ? item : m));
+                if (action === 'delete') {
+                    if (confirm("Xóa món này?")) setMenu(menu.filter(m => m.id !== item.id));
+                }
+            };
+
+            // IF NOT LOGGED IN
+            if (!currentUser) {
+                return <LoginScreen onLogin={handleLogin} />;
+            }
+
             // MENU CONFIG
-            // Nếu là Staff -> Chỉ hiện POS
-            const menuItems = role === 'manager' 
+            const menuItems = currentUser.role === 'manager' 
                 ? [
                     { id: 'dashboard', icon: 'bar-chart-2', label: 'Tổng Quan' },
                     { id: 'requests', icon: 'bell-ring', label: `Yêu Cầu (${requests.length})`, alert: requests.length > 0 },
@@ -456,12 +584,38 @@
                     { id: 'pos', icon: 'grid', label: 'Sơ đồ bàn / Gọi món' }
                 ];
 
+            // STAFF RANKING DISPLAY
+            const StaffStats = () => {
+                if (currentUser.role === 'manager') return null;
+                const { mySales, rank } = getStaffStats(currentUser.username);
+                return (
+                    <div className="mx-4 mt-4 mb-2 p-3 bg-slate-800 rounded-xl border border-slate-700">
+                        <div className="flex items-center gap-3 mb-2">
+                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center font-bold text-white text-sm">
+                                #{rank}
+                            </div>
+                            <div>
+                                <p className="text-xs text-slate-400">Xếp hạng</p>
+                                <p className="text-sm font-bold text-white">Top {rank}</p>
+                            </div>
+                        </div>
+                        <div className="border-t border-slate-700 pt-2">
+                             <p className="text-xs text-slate-400">Doanh số cá nhân</p>
+                             <p className="text-amber-500 font-mono font-bold">{formatMoney(mySales)}</p>
+                        </div>
+                    </div>
+                )
+            };
+
             const Sidebar = () => (
                 <div className="hidden md:flex w-64 flex-col bg-slate-900 border-r border-slate-800 h-screen fixed left-0 top-0 z-20">
                     <div className="p-6 border-b border-slate-800">
                         <h1 className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-500 to-purple-600">BAR PRO</h1>
-                        <p className="text-xs text-slate-500 mt-1">Vai trò: <span className="text-white font-bold uppercase">{role}</span></p>
+                        <p className="text-xs text-slate-500 mt-1">Xin chào, <span className="text-white font-bold">{currentUser.name}</span></p>
                     </div>
+                    
+                    <StaffStats />
+
                     <nav className="flex-1 p-4 space-y-2">
                         {menuItems.map(item => (
                             <button key={item.id} onClick={() => setView(item.id)} 
@@ -473,8 +627,8 @@
                         ))}
                     </nav>
                     <div className="p-4 border-t border-slate-800">
-                        <button onClick={requestRoleSwitch} className="w-full py-2 bg-slate-800 rounded text-xs text-slate-400 hover:text-white transition-colors">
-                            {role === 'manager' ? 'Chuyển sang NV' : 'Đăng nhập Quản lý'}
+                        <button onClick={handleLogout} className="w-full py-2 bg-slate-800 rounded text-xs text-red-400 hover:text-red-300 transition-colors flex items-center justify-center gap-2">
+                            <Icon name="log-out" size={14} /> Đăng xuất
                         </button>
                     </div>
                 </div>
@@ -482,10 +636,12 @@
 
             const MainContent = () => {
                 switch(view) {
-                    case 'pos': return <POSSystem tables={tables} menu={menu} role={role} onUpdateTable={handleUpdateTable} onCheckout={handleCheckout} onVoidRequest={handleVoidRequest} />;
+                    case 'pos': return <POSSystem tables={tables} menu={menu} currentUser={currentUser} onUpdateTable={handleUpdateTable} onCheckout={handleCheckout} onVoidRequest={handleVoidRequest} />;
                     case 'requests': return <RequestManager requests={requests} onApprove={handleApproveVoid} onReject={handleRejectVoid} />;
+                    case 'menu': return <MenuManager menu={menu} inventory={inventory} onUpdateMenu={handleUpdateMenu} />;
+                    case 'inventory': return <div className="p-8"><h2 className="text-xl font-bold mb-4">Kho Hàng</h2><p className="text-slate-500">Danh sách kho...</p></div>;
                     case 'dashboard': 
-                        if (role === 'staff') return <div className="p-10 text-center">Bạn không có quyền truy cập.</div>;
+                        if (currentUser.role === 'staff') return <div className="p-10 text-center">Bạn không có quyền truy cập.</div>;
                         return (
                              <div className="p-8">
                                 <h2 className="text-2xl font-bold mb-4">Dashboard Quản Lý</h2>
@@ -504,23 +660,6 @@
                 <div className="min-h-screen bg-slate-950 text-slate-200">
                     <Sidebar />
                     
-                    {/* PIN MODAL */}
-                    {showPinModal && (
-                        <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
-                            <div className="bg-slate-800 p-6 rounded-xl border border-slate-600 w-full max-w-sm text-center shadow-2xl">
-                                <div className="mb-4">
-                                    <div className="w-16 h-16 bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-2 text-amber-500"><Icon name="lock" size={32} /></div>
-                                    <h3 className="text-xl font-bold text-white">Yêu cầu xác thực</h3>
-                                </div>
-                                <input type="password" value={pinInput} onChange={(e) => setPinInput(e.target.value)} placeholder="••••••" maxLength={6} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-center text-2xl tracking-widest text-white mb-4 focus:border-amber-500 outline-none" />
-                                <div className="flex gap-2">
-                                    <button onClick={() => { setShowPinModal(false); setPinInput(''); }} className="flex-1 py-3 bg-slate-700 rounded-lg font-bold hover:bg-slate-600">Hủy</button>
-                                    <button onClick={confirmPin} className="flex-1 py-3 bg-amber-600 rounded-lg font-bold text-white hover:bg-amber-500">Mở khóa</button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
                     {/* Mobile Menu */}
                     <div className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 z-50 flex justify-around p-2 safe-bottom">
                          {menuItems.map(item => (
@@ -529,7 +668,7 @@
                                 {item.alert && <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>}
                             </button>
                         ))}
-                         <button onClick={requestRoleSwitch} className="p-2 rounded-lg text-slate-400"><Icon name="user" /></button>
+                         <button onClick={handleLogout} className="p-2 rounded-lg text-red-400"><Icon name="log-out" /></button>
                     </div>
 
                     <div className="md:pl-64 h-screen flex flex-col overflow-hidden pb-16 md:pb-0">
